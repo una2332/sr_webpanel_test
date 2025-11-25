@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Test Case Generator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            padding: 16px;
+            background: #fff;
+        }
+
+        .container {
+            max-width: 100%;
+        }
+
+        h2 {
+            color: #172b4d;
+            margin-bottom: 8px;
+            font-size: 18px;
+        }
+
+        .subtitle {
+            color: #5e6c84;
+            font-size: 13px;
+            margin-bottom: 20px;
+        }
+
+        .config-section {
+            background: #f4f5f7;
+            border-radius: 4px;
+            padding: 12px;
+            margin-bottom: 16px;
+        }
+
+        .config-section h3 {
+            font-size: 13px;
+            color: #172b4d;
+            margin-bottom: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .config-section h3:after {
+            content: ' ▼';
+            font-size: 9px;
+        }
+
+        .config-section h3.collapsed:after {
+            content: ' ▶';
+        }
+
+        .form-group {
+            margin-bottom: 10px;
+        }
+
+        label {
+            display: block;
+            font-size: 11px;
+            font-weight: 600;
+            color: #5e6c84;
+            margin-bottom: 4px;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 6px 10px;
+            border: 2px solid #dfe1e6;
+            border-radius: 3px;
+            font-size: 13px;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #0052cc;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 3px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            margin-right: 8px;
+            margin-top: 8px;
+        }
+
+        .btn-primary {
+            background: #0052cc;
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #0747a6;
+        }
+
+        .btn-secondary {
+            background: #f4f5f7;
+            color: #42526e;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #ebecf0;
+        }
+
+        .btn-success {
+            background: #00875a;
+            color: white;
+        }
+
+        .btn-success:hover:not(:disabled) {
+            background: #006644;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .testcase-output {
+            background: #f4f5f7;
+            border-radius: 4px;
+            padding: 12px;
+            margin: 16px 0;
+            min-height: 150px;
+            white-space: pre-wrap;
+            font-size: 12px;
+            line-height: 1.5;
+            color: #172b4d;
+            display: none;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .testcase-output.show {
+            display: block;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 16px;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #0052cc;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .alert {
+            padding: 10px 12px;
+            border-radius: 3px;
+            margin-bottom: 12px;
+            font-size: 12px;
+            display: none;
+        }
+
+        .alert.show {
+            display: block;
+        }
+
+        .alert-success {
+            background: #e3fcef;
+            color: #006644;
+            border-left: 3px solid #00875a;
+        }
+
+        .alert-error {
+            background: #ffebe6;
+            color: #bf2600;
+            border-left: 3px solid #de350b;
+        }
+
+        .alert-info {
+            background: #deebff;
+            color: #0747a6;
+            border-left: 3px solid #0052cc;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .collapsible-content {
+            max-height: 2000px;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .collapsible-content.collapsed {
+            max-height: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>🤖 AI Test Case Generator</h2>
+        <p class="subtitle">Generate test cases using Google Gemini AI</p>
+
+        <div class="alert alert-info" id="issueInfo"></div>
+        <div class="alert alert-success" id="successAlert"></div>
+        <div class="alert alert-error" id="errorAlert"></div>
+
+        <div class="config-section">
+            <h3 onclick="toggleConfig()">⚙️ Configuration</h3>
+            <div id="configContent" class="collapsible-content">
+                <div class="form-group">
+                    <label for="jiraApiToken">Jira API Token</label>
+                    <input type="password" id="jiraApiToken" placeholder="Your Jira API token">
+                </div>
+                <div class="form-group">
+                    <label for="jiraEmail">Jira Email</label>
+                    <input type="email" id="jiraEmail" placeholder="your-email@example.com">
+                </div>
+                <div class="form-group">
+                    <label for="geminiApiKey">Google Gemini API Key</label>
+                    <input type="password" id="geminiApiKey" placeholder="Your Gemini API key">
+                </div>
+                <div class="form-group">
+                    <label for="testrailApiKey">TestRail API Key</label>
+                    <input type="password" id="testrailApiKey" placeholder="Your TestRail API key">
+                </div>
+                <div class="form-group">
+                    <label for="testrailEmail">TestRail Email</label>
+                    <input type="email" id="testrailEmail" placeholder="your-email@example.com">
+                </div>
+                <div class="form-group">
+                    <label for="testrailProjectId">TestRail Project ID</label>
+                    <input type="text" id="testrailProjectId" placeholder="e.g., 1">
+                </div>
+                <div class="form-group">
+                    <label for="testrailSuiteId">TestRail Suite ID (Optional)</label>
+                    <input type="text" id="testrailSuiteId" placeholder="e.g., 1">
+                </div>
+            </div>
+        </div>
+
+        <div class="button-group">
+            <button class="btn btn-primary" id="generateBtn" onclick="generateTestCase()">
+                ✨ Generate Test Case
+            </button>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Generating test case with AI...</p>
+        </div>
+
+        <div class="testcase-output" id="testcaseOutput"></div>
+
+        <div class="button-group" id="actionButtons" style="display: none;">
+            <button class="btn btn-secondary" onclick="regenerateTestCase()">
+                🔄 Regenerate
+            </button>
+            <button class="btn btn-success" onclick="confirmAndCreate()">
+                ✓ Confirm & Create in TestRail
+            </button>
+        </div>
+    </div>
+
+    <script>
+        console.log('Script loaded');
+
+        // Configuration
+        const JIRA_BASE_URL = 'https://teamfox-sandbox.atlassian.net';
+        const TESTRAIL_BASE_URL = 'https://teamfoxsandbox.testrail.io';
+        const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
+
+        let currentIssue = null;
+        let generatedTestCase = null;
+
+        // Get issue key from various sources
+        function getIssueKey() {
+            // Try URL parameter first
+            const urlParams = new URLSearchParams(window.location.search);
+            let issueKey = urlParams.get('issueKey');
+            
+            if (issueKey) {
+                console.log('Found issue key in URL params:', issueKey);
+                return issueKey;
+            }
+
+            // Try to get from path
+            const path = window.location.pathname;
+            const match = path.match(/browse\/([A-Z]+-\d+)/);
+            if (match) {
+                console.log('Found issue key in path:', match[1]);
+                return match[1];
+            }
+
+            // Try to get from parent window (if in iframe)
+            try {
+                if (window.parent && window.parent !== window) {
+                    const parentPath = window.parent.location.pathname;
+                    const parentMatch = parentPath.match(/browse\/([A-Z]+-\d+)/);
+                    if (parentMatch) {
+                        console.log('Found issue key in parent path:', parentMatch[1]);
+                        return parentMatch[1];
+                    }
+                }
+            } catch (e) {
+                console.log('Cannot access parent window:', e);
+            }
+
+            // Try JIRA context (ScriptRunner specific)
+            if (typeof AP !== 'undefined') {
+                console.log('AP object found, trying to get context');
+                AP.context.getContext(function(context) {
+                    if (context && context.jira && context.jira.issue) {
+                        console.log('Found issue key in AP context:', context.jira.issue.key);
+                        currentIssue = { key: context.jira.issue.key };
+                        showInfo('📋 Issue: ' + context.jira.issue.key);
+                    }
+                });
+            }
+
+            return null;
+        }
+
+        // Initialize
+        function initialize() {
+            console.log('Initializing...');
+            
+            const issueKey = getIssueKey();
+            
+            if (issueKey) {
+                currentIssue = { key: issueKey };
+                showInfo('📋 Issue: ' + issueKey);
+            } else {
+                showInfo('⚠️ Issue key not detected. Enter manually or configure API to load.');
+            }
+
+            // Load saved configuration
+            loadConfig();
+            
+            console.log('Initialization complete');
+        }
+
+        function loadConfig() {
+            ['jiraEmail', 'testrailEmail', 'testrailProjectId', 'testrailSuiteId'].forEach(key => {
+                try {
+                    const value = sessionStorage.getItem(key);
+                    if (value) {
+                        const element = document.getElementById(key);
+                        if (element) element.value = value;
+                    }
+                } catch (e) {
+                    console.log('Cannot load from sessionStorage:', e);
+                }
+            });
+        }
+
+        function saveConfig() {
+            const config = {
+                jiraEmail: document.getElementById('jiraEmail').value,
+                testrailEmail: document.getElementById('testrailEmail').value,
+                testrailProjectId: document.getElementById('testrailProjectId').value,
+                testrailSuiteId: document.getElementById('testrailSuiteId').value
+            };
+            
+            Object.keys(config).forEach(key => {
+                if (config[key]) {
+                    try {
+                        sessionStorage.setItem(key, config[key]);
+                    } catch (e) {
+                        console.log('Cannot save to sessionStorage:', e);
+                    }
+                }
+            });
+        }
+
+        function toggleConfig() {
+            const content = document.getElementById('configContent');
+            const header = content.previousElementSibling;
+            content.classList.toggle('collapsed');
+            header.classList.toggle('collapsed');
+        }
+
+        function validateConfig() {
+            const required = ['geminiApiKey', 'testrailEmail', 'testrailApiKey', 'testrailProjectId'];
+            
+            for (const field of required) {
+                const value = document.getElementById(field).value;
+                if (!value) {
+                    showError('Please configure: ' + field.replace(/([A-Z])/g, ' $1').trim());
+                    return false;
+                }
+            }
+            
+            saveConfig();
+            return true;
+        }
+
+        async function generateTestCase() {
+            console.log('Generating test case...');
+            
+            if (!validateConfig()) return;
+
+            if (!currentIssue || !currentIssue.key) {
+                showError('No issue key available. Please open this from a Jira issue.');
+                return;
+            }
+
+            showLoading(true);
+            hideError();
+            hideSuccess();
+            document.getElementById('actionButtons').style.display = 'none';
+
+            try {
+                const geminiApiKey = document.getElementById('geminiApiKey').value;
+                const issueKey = currentIssue.key;
+
+                const prompt = `You are a QA engineer. Generate a comprehensive test case for Jira issue ${issueKey}.
+
+Please create a detailed test case with the following structure:
+- Title: A clear, concise title for the test case
+- Preconditions: Any setup required before testing
+- Test Steps: Numbered steps to execute the test (use numbers like 1., 2., 3.)
+- Expected Results: What should happen for each step
+- Test Data: Any specific data needed
+- Priority: High/Medium/Low
+
+Format the output as structured text that can be easily parsed. Make it detailed and professional.`;
+
+                console.log('Calling Gemini API...');
+
+                const response = await fetch(GEMINI_API_URL + '?key=' + geminiApiKey, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{
+                                text: prompt
+                            }]
+                        }]
+                    })
+                });
+
+                console.log('Response status:', response.status);
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error?.message || 'Failed to generate test case');
+                }
+
+                const data = await response.json();
+                console.log('Gemini response received');
+
+                generatedTestCase = data.candidates[0].content.parts[0].text;
+
+                displayTestCase(generatedTestCase);
+                document.getElementById('actionButtons').style.display = 'flex';
+            } catch (error) {
+                console.error('Error:', error);
+                showError('Failed to generate test case: ' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function displayTestCase(testCase) {
+            const output = document.getElementById('testcaseOutput');
+            output.textContent = testCase;
+            output.classList.add('show');
+        }
+
+        async function regenerateTestCase() {
+            await generateTestCase();
+        }
+
+        async function confirmAndCreate() {
+            if (!generatedTestCase) {
+                showError('No test case to create');
+                return;
+            }
+
+            showLoading(true);
+            hideError();
+            hideSuccess();
+
+            try {
+                const testrailEmail = document.getElementById('testrailEmail').value;
+                const testrailApiKey = document.getElementById('testrailApiKey').value;
+                const projectId = document.getElementById('testrailProjectId').value;
+                const suiteId = document.getElementById('testrailSuiteId').value;
+
+                const testCaseData = parseTestCase(generatedTestCase);
+
+                console.log('Creating test case in TestRail...');
+
+                const auth = btoa(testrailEmail + ':' + testrailApiKey);
+                
+                let endpoint = TESTRAIL_BASE_URL + '/index.php?/api/v2/add_case/' + projectId;
+                if (suiteId) {
+                    endpoint += '&suite_id=' + suiteId;
+                }
+
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Basic ' + auth,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(testCaseData)
+                });
+
+                console.log('TestRail response status:', response.status);
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to create test case in TestRail');
+                }
+
+                const result = await response.json();
+                const testCaseUrl = TESTRAIL_BASE_URL + '/index.php?/cases/view/' + result.id;
+
+                const successDiv = document.getElementById('successAlert');
+                successDiv.innerHTML = '✅ Test case successfully created in TestRail!<br><br>🔗 <a href="' + testCaseUrl + '" target="_blank" style="color: #006644; font-weight: bold;">View Test Case</a>';
+                successDiv.classList.add('show');
+
+            } catch (error) {
+                console.error('Error:', error);
+                showError('Failed to create test case in TestRail: ' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function parseTestCase(testCase) {
+            const titleMatch = testCase.match(/Title[:\s]+(.+)/i);
+            const title = titleMatch ? titleMatch[1].trim() : 'Test Case for ' + (currentIssue?.key || 'Issue');
+
+            const preconditions = extractSection(testCase, 'Preconditions?');
+            const steps = extractSection(testCase, 'Test Steps?');
+            const expected = extractSection(testCase, 'Expected Results?');
+
+            let priority = 2;
+            if (testCase.toLowerCase().includes('priority: high')) priority = 1;
+            if (testCase.toLowerCase().includes('priority: low')) priority = 3;
+
+            return {
+                title: title,
+                custom_preconds: preconditions,
+                custom_steps: steps,
+                custom_expected: expected,
+                priority_id: priority,
+                refs: currentIssue?.key || ''
+            };
+        }
+
+        function extractSection(text, sectionName) {
+            const regex = new RegExp(sectionName + '[:\\s]+([\\s\\S]*?)(?=\\n\\n|$|(?:Title|Preconditions?|Test Steps?|Expected Results?|Test Data|Priority)[:\\s])', 'i');
+            const match = text.match(regex);
+            return match ? match[1].trim() : '';
+        }
+
+        function showLoading(show) {
+            document.getElementById('loading').classList.toggle('show', show);
+            document.getElementById('generateBtn').disabled = show;
+        }
+
+        function showError(message) {
+            const alert = document.getElementById('errorAlert');
+            alert.textContent = message;
+            alert.classList.add('show');
+        }
+
+        function hideError() {
+            document.getElementById('errorAlert').classList.remove('show');
+        }
+
+        function showSuccess(message) {
+            const alert = document.getElementById('successAlert');
+            alert.textContent = message;
+            alert.classList.add('show');
+        }
+
+        function hideSuccess() {
+            document.getElementById('successAlert').classList.remove('show');
+        }
+
+        function showInfo(message) {
+            const alert = document.getElementById('issueInfo');
+            alert.textContent = message;
+            alert.classList.add('show');
+        }
+
+        // Initialize when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initialize);
+        } else {
+            initialize();
+        }
+
+        console.log('Script execution complete');
+    </script>
+</body>
+</html>
