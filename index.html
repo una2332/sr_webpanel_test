@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Test Case Generator</title>
+    <script src="https://connect-cdn.atl-paas.net/all.js"></script>
     <style>
         * {
             margin: 0;
@@ -294,71 +295,88 @@
         let currentIssue = null;
         let generatedTestCase = null;
 
-        // Get issue key from various sources
-        function getIssueKey() {
-            // Try URL parameter first
+        // ScriptRunner passes issue context via URL hash or query params
+        function getIssueKeyFromScriptRunner() {
+            // Method 1: Check URL hash (common in ScriptRunner)
+            const hash = window.location.hash;
+            if (hash) {
+                const hashMatch = hash.match(/issueKey=([A-Z]+-\d+)/);
+                if (hashMatch) return hashMatch[1];
+            }
+
+            // Method 2: Check query parameters
             const urlParams = new URLSearchParams(window.location.search);
-            let issueKey = urlParams.get('issueKey');
-            
-            if (issueKey) {
-                console.log('Found issue key in URL params:', issueKey);
-                return issueKey;
-            }
+            const issueKey = urlParams.get('issueKey') || urlParams.get('issue.key');
+            if (issueKey) return issueKey;
 
-            // Try to get from path
-            const path = window.location.pathname;
-            const match = path.match(/browse\/([A-Z]+-\d+)/);
-            if (match) {
-                console.log('Found issue key in path:', match[1]);
-                return match[1];
-            }
-
-            // Try to get from parent window (if in iframe)
-            try {
-                if (window.parent && window.parent !== window) {
-                    const parentPath = window.parent.location.pathname;
-                    const parentMatch = parentPath.match(/browse\/([A-Z]+-\d+)/);
-                    if (parentMatch) {
-                        console.log('Found issue key in parent path:', parentMatch[1]);
-                        return parentMatch[1];
-                    }
-                }
-            } catch (e) {
-                console.log('Cannot access parent window:', e);
-            }
-
-            // Try JIRA context (ScriptRunner specific)
-            if (typeof AP !== 'undefined') {
-                console.log('AP object found, trying to get context');
-                AP.context.getContext(function(context) {
-                    if (context && context.jira && context.jira.issue) {
-                        console.log('Found issue key in AP context:', context.jira.issue.key);
-                        currentIssue = { key: context.jira.issue.key };
-                        showInfo('📋 Issue: ' + context.jira.issue.key);
-                    }
-                });
-            }
+            // Method 3: Check for issue context in URL
+            const pathMatch = window.location.href.match(/issue[\/=]([A-Z]+-\d+)/i);
+            if (pathMatch) return pathMatch[1];
 
             return null;
         }
 
-        // Initialize
+        // Initialize - Wait for AP to be ready
         function initialize() {
             console.log('Initializing...');
+            console.log('Current URL:', window.location.href);
             
-            const issueKey = getIssueKey();
+            // Load saved configuration first
+            loadConfig();
+            
+            // Wait for Atlassian Connect to be ready
+            if (typeof AP !== 'undefined') {
+                console.log('AP is available, getting context...');
+                AP.context.getContext(function(context) {
+                    console.log('Context received:', JSON.stringify(context));
+                    
+                    if (context && context.jira && context.jira.issue && context.jira.issue.key) {
+                        const issueKey = context.jira.issue.key;
+                        console.log('Issue key from AP context:', issueKey);
+                        currentIssue = { key: issueKey };
+                        showInfo('📋 Issue: ' + issueKey);
+                    } else {
+                        // Fallback to URL-based detection
+                        tryUrlDetection();
+                    }
+                });
+            } else {
+                console.log('AP not available, trying URL detection');
+                // If AP not available, try URL detection
+                tryUrlDetection();
+            }
+        }
+
+        function tryUrlDetection() {
+            const issueKey = getIssueKeyFromScriptRunner();
+            console.log('Issue key from URL:', issueKey);
             
             if (issueKey) {
                 currentIssue = { key: issueKey };
                 showInfo('📋 Issue: ' + issueKey);
             } else {
-                showInfo('⚠️ Issue key not detected. Enter manually or configure API to load.');
+                console.error('Could not detect issue key');
+                showIssueKeyInput();
             }
+        }
 
-            // Load saved configuration
-            loadConfig();
-            
-            console.log('Initialization complete');
+        function showIssueKeyInput() {
+            const infoDiv = document.getElementById('issueInfo');
+            infoDiv.innerHTML = `
+                ⚠️ Issue key not auto-detected. Please enter manually:<br>
+                <input type="text" id="manualIssueKey" placeholder="e.g., PROJ-123" style="margin-top: 8px; padding: 6px; border: 2px solid #0052cc; border-radius: 3px;">
+                <button onclick="setManualIssueKey()" style="margin-left: 8px; padding: 6px 12px; background: #0052cc; color: white; border: none; border-radius: 3px; cursor: pointer;">Set Issue</button>
+            `;
+            infoDiv.classList.add('show');
+        }
+
+        function setManualIssueKey() {
+            const issueKey = document.getElementById('manualIssueKey').value.trim();
+            if (issueKey) {
+                setIssueKey(issueKey);
+            } else {
+                showError('Please enter a valid issue key');
+            }
         }
 
         function loadConfig() {
