@@ -297,34 +297,77 @@
 
         // ScriptRunner passes issue context via URL hash or query params
         function getIssueKeyFromScriptRunner() {
-            // Method 1: Check URL hash (common in ScriptRunner)
+            console.log('--- Attempting URL-based issue detection ---');
+            
+            // Method 1: Direct query parameter (most common)
+            const urlParams = new URLSearchParams(window.location.search);
+            console.log('All URL params:', Array.from(urlParams.entries()));
+            
+            const issueKey1 = urlParams.get('issueKey');
+            console.log('urlParams.get("issueKey"):', issueKey1);
+            if (issueKey1) return issueKey1;
+            
+            const issueKey2 = urlParams.get('issue.key');
+            console.log('urlParams.get("issue.key"):', issueKey2);
+            if (issueKey2) return issueKey2;
+            
+            const issueKey3 = urlParams.get('issue');
+            console.log('urlParams.get("issue"):', issueKey3);
+            if (issueKey3) return issueKey3;
+
+            // Method 2: Check URL hash
             const hash = window.location.hash;
+            console.log('URL hash:', hash);
             if (hash) {
-                const hashMatch = hash.match(/issueKey=([A-Z]+-\d+)/);
+                const hashMatch = hash.match(/issueKey=([A-Z]+-\d+)/i);
+                console.log('Hash match result:', hashMatch);
                 if (hashMatch) return hashMatch[1];
             }
 
-            // Method 2: Check query parameters
-            const urlParams = new URLSearchParams(window.location.search);
-            const issueKey = urlParams.get('issueKey') || urlParams.get('issue.key');
-            if (issueKey) return issueKey;
+            // Method 3: Check entire URL for issue pattern
+            const fullUrl = window.location.href;
+            console.log('Full URL:', fullUrl);
+            const urlMatch = fullUrl.match(/[?&]issueKey=([A-Z]+-\d+)/i);
+            console.log('URL match result:', urlMatch);
+            if (urlMatch) return urlMatch[1];
 
-            // Method 3: Check for issue context in URL
-            const pathMatch = window.location.href.match(/issue[\/=]([A-Z]+-\d+)/i);
-            if (pathMatch) return pathMatch[1];
+            // Method 4: Look for any issue key pattern in URL
+            const anyMatch = fullUrl.match(/([A-Z]+-\d+)/);
+            console.log('Any issue pattern match:', anyMatch);
+            if (anyMatch) return anyMatch[1];
 
+            console.log('--- No issue key found via URL ---');
             return null;
         }
 
         // Initialize - Wait for AP to be ready
         function initialize() {
-            console.log('Initializing...');
+            console.log('=== INITIALIZATION START ===');
             console.log('Current URL:', window.location.href);
+            console.log('URL Search:', window.location.search);
+            console.log('URL Hash:', window.location.hash);
+            console.log('Full location:', JSON.stringify({
+                href: window.location.href,
+                search: window.location.search,
+                hash: window.location.hash,
+                pathname: window.location.pathname
+            }));
             
             // Load saved configuration first
             loadConfig();
             
-            // Wait for Atlassian Connect to be ready
+            // First try URL detection immediately (most reliable for ScriptRunner)
+            const urlIssueKey = getIssueKeyFromScriptRunner();
+            console.log('Issue key from URL detection:', urlIssueKey);
+            
+            if (urlIssueKey) {
+                currentIssue = { key: urlIssueKey };
+                showInfo('📋 Issue: ' + urlIssueKey);
+                console.log('=== INITIALIZATION COMPLETE - Issue key set from URL ===');
+                return;
+            }
+            
+            // If URL detection failed, try AP
             if (typeof AP !== 'undefined') {
                 console.log('AP is available, getting context...');
                 AP.context.getContext(function(context) {
@@ -335,27 +378,14 @@
                         console.log('Issue key from AP context:', issueKey);
                         currentIssue = { key: issueKey };
                         showInfo('📋 Issue: ' + issueKey);
+                        console.log('=== INITIALIZATION COMPLETE - Issue key set from AP ===');
                     } else {
-                        // Fallback to URL-based detection
-                        tryUrlDetection();
+                        console.error('No issue found in AP context');
+                        showIssueKeyInput();
                     }
                 });
             } else {
-                console.log('AP not available, trying URL detection');
-                // If AP not available, try URL detection
-                tryUrlDetection();
-            }
-        }
-
-        function tryUrlDetection() {
-            const issueKey = getIssueKeyFromScriptRunner();
-            console.log('Issue key from URL:', issueKey);
-            
-            if (issueKey) {
-                currentIssue = { key: issueKey };
-                showInfo('📋 Issue: ' + issueKey);
-            } else {
-                console.error('Could not detect issue key');
+                console.log('AP not available');
                 showIssueKeyInput();
             }
         }
