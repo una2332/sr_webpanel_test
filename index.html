@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Test Case Generator</title>
-    <script src="https://connect-cdn.atl-paas.net/all.js"></script>
+    <script src="https://connect-cdn.atl-paas.net/all.js" async></script>
     <style>
         * {
             margin: 0;
@@ -340,53 +340,70 @@
             return null;
         }
 
-        // Initialize - Wait for AP to be ready
+        // Initialize - Wait for AP to be fully ready
         function initialize() {
             console.log('=== INITIALIZATION START ===');
             console.log('Current URL:', window.location.href);
-            console.log('URL Search:', window.location.search);
-            console.log('URL Hash:', window.location.hash);
-            console.log('Full location:', JSON.stringify({
-                href: window.location.href,
-                search: window.location.search,
-                hash: window.location.hash,
-                pathname: window.location.pathname
-            }));
             
             // Load saved configuration first
             loadConfig();
             
-            // First try URL detection immediately (most reliable for ScriptRunner)
+            // Try URL detection first
             const urlIssueKey = getIssueKeyFromScriptRunner();
             console.log('Issue key from URL detection:', urlIssueKey);
             
-            if (urlIssueKey) {
+            if (urlIssueKey && !urlIssueKey.includes('${')) {
+                // Found valid issue key in URL (not a variable)
                 currentIssue = { key: urlIssueKey };
                 showInfo('📋 Issue: ' + urlIssueKey);
-                console.log('=== INITIALIZATION COMPLETE - Issue key set from URL ===');
+                console.log('=== Issue key set from URL ===');
                 return;
             }
             
-            // If URL detection failed, try AP
-            if (typeof AP !== 'undefined') {
-                console.log('AP is available, getting context...');
+            // Wait for AP to be ready
+            console.log('Waiting for AP to be ready...');
+            waitForAP();
+        }
+
+        function waitForAP() {
+            let attempts = 0;
+            const maxAttempts = 50; // 5 seconds total
+            
+            const checkAP = setInterval(function() {
+                attempts++;
+                console.log('Checking for AP... Attempt:', attempts);
+                
+                if (typeof AP !== 'undefined' && AP.context && typeof AP.context.getContext === 'function') {
+                    clearInterval(checkAP);
+                    console.log('AP is ready!');
+                    getIssueFromAP();
+                } else if (attempts >= maxAttempts) {
+                    clearInterval(checkAP);
+                    console.error('AP failed to load after', attempts, 'attempts');
+                    showError('Could not connect to Jira. Please refresh the page.');
+                }
+            }, 100); // Check every 100ms
+        }
+
+        function getIssueFromAP() {
+            try {
                 AP.context.getContext(function(context) {
-                    console.log('Context received:', JSON.stringify(context));
+                    console.log('AP Context received:', JSON.stringify(context));
                     
                     if (context && context.jira && context.jira.issue && context.jira.issue.key) {
                         const issueKey = context.jira.issue.key;
                         console.log('Issue key from AP context:', issueKey);
                         currentIssue = { key: issueKey };
                         showInfo('📋 Issue: ' + issueKey);
-                        console.log('=== INITIALIZATION COMPLETE - Issue key set from AP ===');
+                        console.log('=== Issue key set from AP ===');
                     } else {
                         console.error('No issue found in AP context');
-                        showIssueKeyInput();
+                        showError('Could not detect issue. Context: ' + JSON.stringify(context));
                     }
                 });
-            } else {
-                console.log('AP not available');
-                showIssueKeyInput();
+            } catch (error) {
+                console.error('Error getting AP context:', error);
+                showError('Error getting issue context: ' + error.message);
             }
         }
 
