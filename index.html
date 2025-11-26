@@ -355,7 +355,15 @@
             if (urlIssueKey && !urlIssueKey.includes('${')) {
                 // Found valid issue key in URL (not a variable)
                 currentIssue = { key: urlIssueKey };
-                showInfo('📋 Issue: ' + urlIssueKey);
+                
+                // Try to fetch full issue details if credentials are available
+                const jiraEmail = document.getElementById('jiraEmail').value;
+                const jiraToken = document.getElementById('jiraApiToken').value;
+                if (jiraEmail && jiraToken) {
+                    fetchIssueDetails(urlIssueKey);
+                } else {
+                    showInfo('📋 Issue: ' + urlIssueKey + '\n⚠️ Configure Jira API credentials to load full details');
+                }
                 console.log('=== Issue key set from URL ===');
                 return;
             }
@@ -394,8 +402,9 @@
                         const issueKey = context.jira.issue.key;
                         console.log('Issue key from AP context:', issueKey);
                         currentIssue = { key: issueKey };
-                        showInfo('📋 Issue: ' + issueKey);
-                        console.log('=== Issue key set from AP ===');
+                        
+                        // Now fetch full issue details from Jira
+                        fetchIssueDetails(issueKey);
                     } else {
                         console.error('No issue found in AP context');
                         showError('Could not detect issue. Context: ' + JSON.stringify(context));
@@ -404,6 +413,41 @@
             } catch (error) {
                 console.error('Error getting AP context:', error);
                 showError('Error getting issue context: ' + error.message);
+            }
+        }
+
+        async function fetchIssueDetails(issueKey) {
+            const jiraEmail = document.getElementById('jiraEmail').value;
+            const jiraToken = document.getElementById('jiraApiToken').value;
+
+            // If credentials are provided, fetch full issue details
+            if (jiraEmail && jiraToken) {
+                try {
+                    const auth = btoa(jiraEmail + ':' + jiraToken);
+                    const response = await fetch(JIRA_BASE_URL + '/rest/api/3/issue/' + issueKey, {
+                        headers: {
+                            'Authorization': 'Basic ' + auth,
+                            'Accept': 'application/json'
+                        }
+                    });
+
+                    if (response.ok) {
+                        const issueData = await response.json();
+                        currentIssue = issueData;
+                        console.log('Full issue data fetched:', issueData);
+                        
+                        const fields = issueData.fields || {};
+                        showInfo('📋 Issue: ' + issueKey + '\n📝 ' + (fields.summary || 'N/A'));
+                    } else {
+                        console.warn('Could not fetch full issue details, using key only');
+                        showInfo('📋 Issue: ' + issueKey + '\n⚠️ Configure Jira API credentials to load full details');
+                    }
+                } catch (error) {
+                    console.error('Error fetching issue details:', error);
+                    showInfo('📋 Issue: ' + issueKey + '\n⚠️ Could not load full details');
+                }
+            } else {
+                showInfo('📋 Issue: ' + issueKey + '\n⚠️ Configure Jira API credentials to load full details');
             }
         }
 
