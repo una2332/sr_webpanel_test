@@ -265,6 +265,9 @@
             <button class="btn btn-primary" id="generateBtn" onclick="generateTestCase()">
                 ✨ Generate Test Case
             </button>
+            <button class="btn btn-secondary" onclick="refreshIssueData()">
+                🔄 Refresh Issue Data
+            </button>
         </div>
 
         <div class="loading" id="loading">
@@ -420,35 +423,85 @@
             const jiraEmail = document.getElementById('jiraEmail').value;
             const jiraToken = document.getElementById('jiraApiToken').value;
 
+            console.log('=== FETCHING ISSUE DETAILS ===');
+            console.log('Issue Key:', issueKey);
+            console.log('Jira Email:', jiraEmail);
+            console.log('Has Jira Token:', !!jiraToken);
+
             // If credentials are provided, fetch full issue details
             if (jiraEmail && jiraToken) {
                 try {
+                    showInfo('📋 Loading issue details...');
+                    
                     const auth = btoa(jiraEmail + ':' + jiraToken);
-                    const response = await fetch(JIRA_BASE_URL + '/rest/api/3/issue/' + issueKey, {
+                    const url = JIRA_BASE_URL + '/rest/api/3/issue/' + issueKey;
+                    
+                    console.log('Fetching from URL:', url);
+                    
+                    const response = await fetch(url, {
                         headers: {
                             'Authorization': 'Basic ' + auth,
                             'Accept': 'application/json'
                         }
                     });
 
+                    console.log('Jira API Response status:', response.status);
+
                     if (response.ok) {
                         const issueData = await response.json();
                         currentIssue = issueData;
-                        console.log('Full issue data fetched:', issueData);
+                        console.log('=== FULL ISSUE DATA FETCHED ===');
+                        console.log(JSON.stringify(issueData, null, 2));
                         
                         const fields = issueData.fields || {};
-                        showInfo('📋 Issue: ' + issueKey + '\n📝 ' + (fields.summary || 'N/A'));
+                        const summary = fields.summary || 'N/A';
+                        const issueType = fields.issuetype?.name || 'N/A';
+                        
+                        // Extract description
+                        let descriptionPreview = 'No description';
+                        if (fields.description) {
+                            if (typeof fields.description === 'string') {
+                                descriptionPreview = fields.description.substring(0, 100);
+                            } else if (fields.description.content) {
+                                const fullDesc = extractTextFromADF(fields.description);
+                                descriptionPreview = fullDesc.substring(0, 100);
+                                console.log('Full description extracted:', fullDesc);
+                            }
+                        }
+                        
+                        showInfo('📋 Issue: ' + issueKey + '\n📝 ' + summary + '\n🏷️ Type: ' + issueType + '\n📄 ' + descriptionPreview + '...');
+                        console.log('Issue data successfully loaded and stored in currentIssue');
                     } else {
+                        const errorText = await response.text();
+                        console.error('Jira API Error:', errorText);
                         console.warn('Could not fetch full issue details, using key only');
-                        showInfo('📋 Issue: ' + issueKey + '\n⚠️ Configure Jira API credentials to load full details');
+                        showInfo('📋 Issue: ' + issueKey + '\n⚠️ Error loading details: ' + response.status);
                     }
                 } catch (error) {
                     console.error('Error fetching issue details:', error);
-                    showInfo('📋 Issue: ' + issueKey + '\n⚠️ Could not load full details');
+                    showInfo('📋 Issue: ' + issueKey + '\n⚠️ Could not load full details: ' + error.message);
                 }
             } else {
-                showInfo('📋 Issue: ' + issueKey + '\n⚠️ Configure Jira API credentials to load full details');
+                console.warn('Jira credentials not configured');
+                showInfo('📋 Issue: ' + issueKey + '\n⚠️ Configure Jira API credentials to load summary and description');
             }
+        }
+
+        async function refreshIssueData() {
+            if (!currentIssue || !currentIssue.key) {
+                showError('No issue key available');
+                return;
+            }
+            
+            const jiraEmail = document.getElementById('jiraEmail').value;
+            const jiraToken = document.getElementById('jiraApiToken').value;
+            
+            if (!jiraEmail || !jiraToken) {
+                showError('Please configure Jira API credentials first');
+                return;
+            }
+            
+            await fetchIssueDetails(currentIssue.key);
         }
 
         function showIssueKeyInput() {
@@ -519,6 +572,15 @@
                     showError('Please configure: ' + field.replace(/([A-Z])/g, ' $1').trim());
                     return false;
                 }
+            }
+            
+            // Check if we have Jira credentials for fetching issue data
+            const jiraEmail = document.getElementById('jiraEmail').value;
+            const jiraToken = document.getElementById('jiraApiToken').value;
+            
+            if (!jiraEmail || !jiraToken) {
+                showError('Please configure Jira API credentials (email and token) to fetch issue details for better test case generation.');
+                return false;
             }
             
             saveConfig();
