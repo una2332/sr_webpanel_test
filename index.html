@@ -294,6 +294,10 @@
         const JIRA_BASE_URL = 'https://teamfox-sandbox.atlassian.net';
         const TESTRAIL_BASE_URL = 'https://teamfoxsandbox.testrail.io';
         const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+        
+        // Use CORS proxy for Jira requests (GitHub Pages can't directly call Jira API)
+        const CORS_PROXY = 'https://corsproxy.io/?';
+        const USE_CORS_PROXY = true; // Set to false if hosting on own server
 
         let currentIssue = null;
         let generatedTestCase = null;
@@ -306,9 +310,34 @@
             const urlParams = new URLSearchParams(window.location.search);
             console.log('All URL params:', Array.from(urlParams.entries()));
             
-            const issueKey1 = urlParams.get('issueKey');
-            console.log('urlParams.get("issueKey"):', issueKey1);
-            if (issueKey1) return issueKey1;
+            // Try to get issue data from URL params (passed by ScriptRunner)
+            const issueKey = urlParams.get('issueKey');
+            const issueSummary = urlParams.get('issueSummary');
+            const issueDescription = urlParams.get('issueDescription');
+            const issueType = urlParams.get('issueType');
+            const issuePriority = urlParams.get('issuePriority');
+            
+            console.log('URL params - issueKey:', issueKey);
+            console.log('URL params - issueSummary:', issueSummary);
+            console.log('URL params - issueDescription:', issueDescription);
+            
+            // If we have issue data from URL, create a full issue object
+            if (issueKey && (issueSummary || issueDescription)) {
+                console.log('Building issue object from URL params');
+                currentIssue = {
+                    key: issueKey,
+                    fields: {
+                        summary: decodeURIComponent(issueSummary || ''),
+                        description: decodeURIComponent(issueDescription || ''),
+                        issuetype: { name: decodeURIComponent(issueType || 'N/A') },
+                        priority: { name: decodeURIComponent(issuePriority || 'N/A') }
+                    }
+                };
+                console.log('Issue object created from URL:', JSON.stringify(currentIssue));
+                return issueKey;
+            }
+            
+            if (issueKey) return issueKey;
             
             const issueKey2 = urlParams.get('issue.key');
             console.log('urlParams.get("issue.key"):', issueKey2);
@@ -427,6 +456,7 @@
             console.log('Issue Key:', issueKey);
             console.log('Jira Email:', jiraEmail);
             console.log('Has Jira Token:', !!jiraToken);
+            console.log('Using CORS Proxy:', USE_CORS_PROXY);
 
             // If credentials are provided, fetch full issue details
             if (jiraEmail && jiraToken) {
@@ -434,14 +464,21 @@
                     showInfo('📋 Loading issue details...');
                     
                     const auth = btoa(jiraEmail + ':' + jiraToken);
-                    const url = JIRA_BASE_URL + '/rest/api/3/issue/' + issueKey;
+                    let url = JIRA_BASE_URL + '/rest/api/3/issue/' + issueKey;
+                    
+                    // Add CORS proxy if needed
+                    if (USE_CORS_PROXY) {
+                        url = CORS_PROXY + encodeURIComponent(url);
+                        console.log('Using CORS proxy URL:', url);
+                    }
                     
                     console.log('Fetching from URL:', url);
                     
                     const response = await fetch(url, {
                         headers: {
                             'Authorization': 'Basic ' + auth,
-                            'Accept': 'application/json'
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
                         }
                     });
 
@@ -479,7 +516,7 @@
                     }
                 } catch (error) {
                     console.error('Error fetching issue details:', error);
-                    showInfo('📋 Issue: ' + issueKey + '\n⚠️ Could not load full details: ' + error.message);
+                    showError('Could not load issue details: ' + error.message + '\n\nNote: CORS restrictions may prevent direct API calls from GitHub Pages. Consider using ScriptRunner\'s inline script approach or hosting on your own server.');
                 }
             } else {
                 console.warn('Jira credentials not configured');
