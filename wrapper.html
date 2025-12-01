@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { 
+            margin: 0; 
+            padding: 0; 
+            overflow: hidden; 
+        }
+        iframe { 
+            border: none;
+            width: 100%;
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    <iframe id="panel"></iframe>
+    <script>
+        // Extract issue data from URL parameters (passed by ScriptRunner)
+        const urlParams = new URLSearchParams(window.location.search);
+        const issueKey = urlParams.get('issueKey') || '';
+        const issueSummary = urlParams.get('issueSummary') || '';
+        const issueDescription = urlParams.get('issueDescription') || '';
+        const issueType = urlParams.get('issueType') || '';
+        const issuePriority = urlParams.get('issuePriority') || '';
+        
+        // Build URL for the main panel
+        const panelUrl = 'https://una2332.github.io/sr_webpanel_test/index.html?' + 
+            'issueKey=' + encodeURIComponent(issueKey) +
+            '&issueSummary=' + encodeURIComponent(issueSummary) +
+            '&issueDescription=' + encodeURIComponent(issueDescription) +
+            '&issueType=' + encodeURIComponent(issueType) +
+            '&issuePriority=' + encodeURIComponent(issuePriority);
+        
+        console.log('Loading panel with URL:', panelUrl);
+        document.getElementById('panel').src = panelUrl;
+    </script>
+</body>
+</html>
